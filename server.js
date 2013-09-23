@@ -150,7 +150,7 @@ app.use('/mketo',function(req,res) {
         sm = {};
     req.query = _.extend(req.query,req.body)
     for (var p in req.query) {
-        if (27 <= p.length <= 34) { sm[p] = req.query[p]; }
+        if (27 <= p.length && p.length <= 34) { sm[p] = req.query[p]; }
     }
     eto.mketo(tx,sm,null,mkrespcb(res,400,_.bind(res.json,res)));
 });
@@ -219,7 +219,7 @@ app.use('/',function(req,res) {
     res.render('multigui.jade',{});                                                           
 });
 
-app.listen(3191);
+app.listen(3192);
 
 return app;
 

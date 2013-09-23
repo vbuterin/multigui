@@ -3,14 +3,14 @@ head
     script(src="helps.js")
     script(src="underscore-min.js")
     script(src="bitcoinjs-min.js")
-    script(src="bjswrapper.js")
+    script(src="bitcoinjs-wrapper.js")
     script(src="multigui.js")
     link(rel="stylesheet",type="text/css",href="bootstrap.min.css")
     link(rel="stylesheet",type="text/css",href="main.css")
 body(ng-app="multigui"): div(ng-controller="MultiguiCtrl")
     table.tb.lightblue: tr
         td(style="width:20%; vertical-align: top; padding-top: 65px")
-            div.tabselect(ng-click="activetab = -1",ng-class="{ semilightblue: activetab == -1}") Key management
+            div.tabselect(ng-click="activetab = -1",ng-class="{ semilightblue: activetab == -1}") Generate key
             div.tabselect(ng-click="activetab = 0",ng-class="{ semilightblue: activetab == 0}") Generate address
             div.tabselect(ng-click="activetab = 1",ng-class="{ semilightblue: activetab == 1}") Create transaction
             div.tabselect(ng-click="activetab = 2",ng-class="{ semilightblue: activetab == 2}") Sign transaction

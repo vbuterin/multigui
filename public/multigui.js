@@ -204,7 +204,7 @@ function MultiguiCtrl($scope,$http) {
         if (m) {
             var map = { tx: $scope.inputeto }
             if ($scope.msig.address && $scope.msig.raw) {
-                map[$scope.msig.address = $scope.msig.raw];
+                map[$scope.msig.address] = $scope.msig.raw;
             }
             $http.post('/mketo',map)
                 .success($scope.show_eto)
