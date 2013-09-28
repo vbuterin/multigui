@@ -120,15 +120,18 @@ app.use('/mkmultitx',function(req,res) {
         to     = req.param('to'),
         script = req.param('script'),
         value  = Math.ceil(parseFloat(req.param('value')) * 100000000);
+        console.log(1);
     async.waterfall([function(cb2) {
         if (from.length > 34) {
-            sx.fetch_transaction(utxoid.substring(0,64),eh(cb2,function(tx) {
+            sx.blke_fetch_transaction(utxoid.substring(0,64),eh(cb2,function(tx) {
                 sx.showtx(tx,eh(cb2,function(shown) {
+                    console.log(2);
                     return cb2(null,[shown.outputs[parseInt(utxoid.substring(65))]]);
                 }));
             }));
         }
         else if (from) {
+            console.log(1.5);
             sx.get_utxo(from,value+10000,cb2);
         }
         else { return cb2("Need from or utxo"); }
@@ -197,7 +200,7 @@ app.use('/pusheto',function(req,res) {
 
 app.use('/history',function(req,res) {
     console.log('grabbing',req.param('address'));
-    sx.history(req.param('address'),mkrespcb(res,400,function(h) {
+    sx.bci_history(req.param('address'),mkrespcb(res,400,function(h) {
         console.log('grabbed');
         if (req.param('unspent')) {
             h = h.filter(function(x) { return !x.spend });
