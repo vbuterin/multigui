@@ -4,6 +4,7 @@ head
     script(src="underscore-min.js")
     script(src="bitcoinjs-min.js")
     script(src="bitcoinjs-wrapper.js")
+    script(src="qrcode.js")
     script(src="multigui.js")
     link(rel="stylesheet",type="text/css",href="bootstrap.min.css")
     link(rel="stylesheet",type="text/css",href="main.css")
@@ -83,7 +84,9 @@ body(ng-app="multigui"): div(ng-controller="MultiguiCtrl")
                 div(ng-show="activetab == 1")
                     table.tb(cellpadding="20px"): tr
                         td(style="width:40%")
-                            input.fullwidth(type="text",placeholder="From",ng-model="msig.address")
+                            div
+                                input(type="text",style="width:67%",placeholder="From",ng-model="msig.address")
+                                div#addrqrcode(style="width:26%; display: inline")
                             br
                             div(style="position:relative")
                                 .help(ng-hide="hidehelp",ng-click="help('script')") ?
@@ -112,7 +115,7 @@ body(ng-app="multigui"): div(ng-controller="MultiguiCtrl")
                                     .pill.tabselect(ng-click="showbox=3",ng-class="{semilightblue: showbox == 3}") SX Instructions
                                 div.tabbody(ng-show="!showbox")
                                     .help(ng-hide="hidehelp",ng-click="help('eto')") ?
-                                    textarea.semilightblue.pill.monospace.fullheight.fullwidth(type="text",onclick="this.select()",placeholder="ETO",ng-model="inputeto")
+                                    textarea.semilightblue.pill.monospace.fullheight.fullwidth(type="text",placeholder="ETO",ng-model="inputeto")
                                 div.monospace.tabbody(ng-show="showbox == 1")
                                     div(style="overflow-y:auto; max-height:80%") {{ eto.tx }}
                                 div.monospace.tabbody(ng-show="showbox == 2")

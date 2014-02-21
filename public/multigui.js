@@ -16,7 +16,9 @@ function MultiguiCtrl($scope,$http) {
         $scope.message = { title: "Loading", body: e, loading: true }
     }
     $scope.errlogger = _.partial($scope.dialog,"Error");
-    $scope.txpushed = _.partial($scope.dialog,"Transaction");
+    $scope.txpushed = function(e) {
+        $scope.message = { title: "Transaction", body: '<a href="http://blockchain.info/tx/'+e.replace(/"/g,'')+'">'+e+'</a>' }
+    }
     $scope.clearmessage = function() { $scope.message = null; }
 
     $scope.show_eto = function(eto) { 
@@ -33,18 +35,18 @@ function MultiguiCtrl($scope,$http) {
         var sep = ($scope.keygen.user && $scope.keygen.pass) ? ":" : "",
             alg = $scope.bw_algorithms[$scope.bw_algorithm];
         $scope.keygen.p64 = alg(($scope.keygen.user||"")+sep+($scope.keygen.pass||""));
-        $scope.keygen.priv = base58checkEncode($scope.keygen.p64,128);
+        $scope.keygen.priv = Bitcoin.base58.checkEncode(h2b($scope.keygen.p64),128);
         $scope.keygen.input_priv = $scope.keygen.priv;
     }
     $scope.$watch('keygen',function(newobj,oldobj) {
         if (newobj.input_priv != oldobj.input_priv) {
             if (newobj.input_priv.length == 64) {
                 newobj.p64 = newobj.input_priv;
-                newobj.priv = base58checkDecode(newobj.input_priv,128);
+                newobj.priv = Bitcoin.base58.checkEncode(h2b(newobj.input_priv),128);
             }
             else {
                 try {
-                    newobj.p64 = base58checkDecode(newobj.input_priv);
+                    newobj.p64 = b2h(Bitcoin.base58.checkDecode(newobj.input_priv));
                     newobj.priv = newobj.input_priv;
                 }
                 catch(e) { }
@@ -134,6 +136,23 @@ function MultiguiCtrl($scope,$http) {
             address: addr
         }
     }
+    $scope.$watch('msig.address',function() {
+	var qrspan = document.getElementById('addrqrcode')
+        Array.prototype.slice.call(document.querySelectorAll("#addrqrcode img"))
+                             .map(function(x) { qrspan.removeChild(x) })
+        Array.prototype.slice.call(document.querySelectorAll("#addrqrcode canvas"))
+                             .map(function(x) { qrspan.removeChild(x) })
+        new QRCode(qrspan, {
+            text: $scope.msig.address,
+            height: 100,
+            width: 100
+        })
+        document.querySelectorAll("#addrqrcode img")[0].style.margin = "0 auto";
+        document.querySelectorAll("#addrqrcode canvas")[0].style.display = "none";
+        setTimeout(function() {
+                document.querySelectorAll("#addrqrcode img")[0].style.display = "inline"; 
+        })
+    })
 
     $scope.$watch('msiginp',$scope.getMultiAddr,true);
     $scope.$watch('msiginp.pubkeys',$scope.getMultiAddr,true);
@@ -330,7 +349,12 @@ function MultiguiCtrl($scope,$http) {
                     $scope.eto = eto;
                     $scope.message = null;
                     $scope.tryApply();
-                },_.compose($scope.tryApply,$scope.errlogger));
+                },function(r) {
+                    $scope.errlogger(r);
+                    var u = $scope.etosigarray;
+                    $scope.$apply(function() { $scope.etosigarray = null; })
+                    $scope.$apply(function() { $scope.etosigarray = u; })
+                })
             }
             catch(e) { 
                 _.compose($scope.tryApply,$scope.errlogger)(e);
@@ -340,9 +364,24 @@ function MultiguiCtrl($scope,$http) {
 
     //Push completed transaction
     $scope.push = function() {
+        var pushed = 0;
+        var message = '';
+        function success(r) {
+            pushed += 1;
+            message = r;
+            if (pushed == 2) { $scope.txpushed(message) }
+        }
+        function error(r) {
+            pushed += 1;
+            message = message || r;
+            if (pushed == 2) { $scope.txpushed(message) }
+        }
         $scope.inprogress("Pushing transaction");
         $http.post("/pusheto",{ eto: $scope.inputeto })
-            .success($scope.txpushed)
-            .error($scope.errlogger)
+            .success(success)
+            .error(error)
+        $http.post("/eligius_pusheto",{ eto: $scope.inputeto })
+            .success(success)
+            .error(error)
     }
 }

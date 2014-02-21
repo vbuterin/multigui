@@ -2,6 +2,7 @@ var sx              = require('node-sx'),
     eto             = sx.eto,
     express         = require('express'),
     crypto          = require('crypto'),
+    cp              = require('child_process'),
     async           = require('async'),
     _               = require('underscore'),
     sha256          = function(x) { return crypto.createHash('sha256').update(x).digest('hex') },
@@ -13,6 +14,15 @@ crypto.randomBytes(100,function(err,buf) {
     if (err) { throw err; }
     entropy = buf.toString('hex');
 });
+
+var pybtctool = function(command, argz) {                                                 
+    var cb = arguments[arguments.length - 1]                                              
+        args = Array.prototype.slice.call(arguments,1,arguments.length-1)                 
+                    .map(function(x) {                                                    
+                        return (''+x).replace('\\','\\\\').replace(' ','\\ ')             
+                     })                                                                   
+    cp.exec('pybtctool '+command+' '+args.join(' '),cb);                                  
+}
 
 var random = function(modulus) {
     var alphabet = '0123456789abcdef';
@@ -189,13 +199,15 @@ app.use('/applysigtoeto',function(req,res) {
 });
 
 app.use('/pusheto',function(req,res) {
-    try {
-        var eto_object = smartParse(req.param('eto'));
-    }
-    catch(e) { 
-        return res.json("Failed to JSON parse: "+req.param("eto"),400); 
-    }
+    try { var eto_object = smartParse(req.param('eto')); }
+    catch(e) { return res.json("Failed to JSON parse: "+req.param("eto"),400); }
     eto.publish_eto(eto_object,mkrespcb(res,400,_.bind(res.json,res)));
+});
+
+app.use('/eligius_pusheto',function(req,res) {
+    try { var eto_object = smartParse(req.param('eto')); }
+    catch(e) { return res.json("Failed to JSON parse: "+req.param("eto"),400); }
+    pybtctool('eligius_pushtx',eto_object.tx,mkrespcb(res,400,_.bind(res.json,res)))
 });
 
 app.use('/history',function(req,res) {
@@ -222,7 +234,7 @@ app.use('/',function(req,res) {
     res.render('multigui.jade',{});                                                           
 });
 
-app.listen(3192);
+app.listen(80);
 
 return app;
 

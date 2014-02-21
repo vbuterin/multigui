@@ -13,63 +13,12 @@ Bitcoin.Util.numToVarInt = function(num) {
 
 // These are so often used....
 
-var h2b = Crypto.util.hexToBytes,
-    b2h = Crypto.util.bytesToHex;
-
-// Deserialization from binary buffer (ideally, this should be included in BitcoinJSLib mainline)
-
-Bitcoin.Transaction.deserialize = function(buffer) {
-    var pos = 0;
-    var readAsInt = function(bytes) {
-        if (bytes == 0) return 0;
-        pos++;
-        return buffer[pos-1] + readAsInt(bytes-1) * 256;
-    }
-    var readVarInt = function() {
-        pos++;
-        if (buffer[pos-1] < 253) {
-            return buffer[pos-1];
-        }
-        return readAsInt(buffer[pos-1] - 251);
-    }
-    var readBytes = function(bytes) {
-        pos += bytes;
-        return buffer.slice(pos - bytes, pos);
-    }
-    var readVarString = function() {
-        var size = readVarInt();
-        return readBytes(size);
-    }
-    var obj = {
-        ins: [],
-        outs: []
-    }
-    obj.version = readAsInt(4);
-    var ins = readVarInt();
-    for (var i = 0; i < ins; i++) {
-        obj.ins.push({
-            outpoint: {
-                hash: Bitcoin.Util.bytesToBase64(readBytes(32)),
-                index: readAsInt(4)
-            },
-            script: new Bitcoin.Script(readVarString()),
-            sequence: readAsInt(4)
-        });
-    }
-    var outs = readVarInt();
-    for (var i = 0; i < outs; i++) {
-        obj.outs.push({
-            value: readBytes(8),
-            script: new Bitcoin.Script(readVarString())
-        });
-    }
-    obj.locktime = readAsInt(4);
-    return new Bitcoin.Transaction(obj);
-}
+var h2b = Bitcoin.convert.hexToBytes,
+    b2h = Bitcoin.convert.bytesToHex;
 
 // Crypto primitives
 
-var sha256 = Crypto.SHA256;
+var sha256 = Bitcoin.Crypto.SHA256;
 
 var slowsha = function(x) {
     var orig = x.split('').map(function(c) { return c.charCodeAt(0) });
@@ -81,41 +30,17 @@ var slowsha = function(x) {
     return b2h(new_pass);
 }
 
-// Bitcoin key/address management
-
-var base58checkEncode = function(x,vbyte) {
-    vbyte = vbyte || 0;
-    var front = [vbyte].concat(h2b(x));
-    var checksum = Crypto.SHA256(Crypto.SHA256(front, {asBytes: true}), {asBytes: true})
-                        .slice(0,4);
-    return Bitcoin.Base58.encode(front.concat(checksum));
-}
-
-var base58checkDecode = function(x) {
-    var bytes = Bitcoin.Base58.decode(x),
-        front = bytes.slice(0,bytes.length-4),
-        back = bytes.slice(bytes.length-4);
-    var checksum = Crypto.SHA256(Crypto.SHA256(front,{asBytes: true}), {asBytes: true})
-                        .slice(0,4);
-    if (""+checksum != ""+back) {
-        throw "Checksum failed";
-    }
-    return b2h(front.slice(1));
-}
-
 var importpk = function(x) {
-    if (x.length == 64) x = base58checkEncode(x);
-    return new Bitcoin.ECKey(x);
+    return new Bitcoin.Key(x);
 }
 
 var privtopub = function(x) {
-    if (x.length == 64) x = base58checkEncode(x,128);
-    return b2h(importpk(x).getPub());
+    return b2h(importpk(x).getPub().export('bytes'));
 }
 
 var pubkey_to_address = function(x,v) {
     var hash160 = Bitcoin.Util.sha256ripe160(h2b(x))
-    return base58checkEncode(b2h(hash160),v);
+    return new Bitcoin.Address(hash160,v).toString()
 }
 var script_to_address = function(x) { return pubkey_to_address(x,5) };
 
@@ -125,7 +50,7 @@ var sign = function(tx,i,pk) {
     console.log('signing',tx,i,pk);
     var btx = Bitcoin.Transaction.deserialize(h2b(tx)),
         ipk = importpk(pk),
-        ipub = ipk.getPub(),
+        ipub = ipk.getPub().export('bytes'),
         hash160 = Bitcoin.Util.sha256ripe160(ipub),
         script = Bitcoin.Script.createOutputScript(new Bitcoin.Address(hash160)),
         hash = btx.hashTransactionForSignature( script, i, 1),
@@ -154,39 +79,8 @@ var validate_input = function(tx,i,script,sig,pub) {
         scriptBytes = h2b(script),
         scriptObj = new Bitcoin.Script(scriptBytes),
         hash = txObj.hashTransactionForSignature(scriptObj,i,1);
-    return Bitcoin.ECDSA.verify(hash, h2b(sig),
+    return Bitcoin.ecdsa.verify(hash, h2b(sig),
                                       h2b(pub));
-}
-
-// Makes a transaction given inputs as
-// ["319ba90f1645eed46a8fd48e9754ca979c3371f59099d32634a8b56549ce02aa:0", ...]
-// and outputs as
-// ["13BekWh2nU1s25PdJdw6aXCWrMXBCVKFnz:50000", ...]
-
-var mktx = function(inputs,outputs,cb) {
-    var tx = new Bitcoin.Transaction();
-    inputs.map(function(i) {
-        var hbytes = h2b(i.output.substring(0,64));
-                                                      // FSM I hate little endian hashes...
-        tx.addInput({ hash: Crypto.util.bytesToBase64(hbytes.reverse()) },
-                      parseInt(i.output.substring(65)));
-    });
-    outputs.map(function(o) {
-        var addrbytes = h2b(base58checkDecode(o.address));
-        tx.addOutput(new Bitcoin.Address(addrbytes),numToBytes(parseInt(o.value),8));
-        // Bitcoin-JS does not support these...
-        if (o.address[0] == '3') {
-            var s = new Bitcoin.Script(), op = Bitcoin.Opcode.map;
-            s.writeOp(op.OP_HASH160);
-            s.writeBytes(addrbytes);
-            s.writeOp(op.OP_EQUAL);
-            tx.outs[tx.outs.length-1].script = s;
-        }
-    });
-    console.log(tx);
-    var otx = b2h(tx.serialize());
-    console.log('Made transaction: ',otx);
-    return cb ? cb(otx) : otx;
 }
 
 // Given a UTXO set as inputs, create a transaction sending the money to a 
@@ -215,7 +109,12 @@ var make_sending_transaction = function(utxo,to,value,change,cb) {
             value: Math.floor((sum-value-10000)/changelen) 
         });
     }
-    return mktx(utxo,outputs,cb);
+    var tx = new Bitcoin.Transaction({
+	inputs: utxo.map(function(x) { return x.output }),
+	outputs: outputs
+    })
+    if (cb) cb(null,tx)
+    return tx
 }
 
 // Get sufficient unspent transaction outputs from a history set to
@@ -263,9 +162,10 @@ var pubkeys_from_script = function(scr) {
 var rawscript = function(scr) {
     var chunks = scr.map(function(x) {
         if (Bitcoin.Opcode.map['OP_'+x]) return Bitcoin.Opcode.map['OP_'+x];
-        return Crypto.util.hexToBytes(x);
+	else if (typeof x == "number") return x
+        return Bitcoin.convert.hexToBytes(x);
     });
-    return Crypto.util.bytesToHex(
+    return Bitcoin.convert.bytesToHex(
         chunks.reduce(function(script,x) {
             if (typeof x == "number") script.writeOp(x);
             else if (typeof x == "object") script.writeBytes(x);
@@ -299,7 +199,7 @@ var process_multisignatures = function(eto) {
         if (script.length == 66 || script.length == 130) {
             continue;
         }
-        if (eto.sigs[i] === true) {
+        if (eto.sigs[i] === true || eto.sigs[i] === null) {
             continue;
         }
         var shownscript = showscript(script),
@@ -362,7 +262,7 @@ var apply_sig_to_eto = function(eto,sig,cb,err) {
         }
         var script = eto.inputscripts[i];
         if (script.length == 66 || script.length == 130) {
-            var v = validate_input(eto.tx,i,script,sig)
+            var v = txObj.validate_sig(i,script,sig)
             if (v) {
                 if (eto.sigs[i] === true) { 
                     if (state == "NOSIG") state = "EXISTSIG";
@@ -420,7 +320,7 @@ var get_sigs = function(eto) {
             sigs = sigs.concat(eto.sigs[i].filter(function(x) { return x }));
         }
         else {
-            if (!txobj.ins[i].script) continue;
+            if (!txobj.ins[i].script.chunks.length) continue;
             var script = showscript(b2h(txobj.ins[i].script.buffer));
             sigs = sigs.concat(script.filter(function(x) {
                 return (""+x).substring(0,3) == "304" && (""+x).length > 130;
